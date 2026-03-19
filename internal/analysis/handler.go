@@ -134,38 +134,100 @@ func recommend(
 ) (models.Recommendation, []string) {
 	var reasons []string
 
-	if sharpe >= 1.0 {
-		reasons = append(reasons, fmt.Sprintf("Strong Sharpe Ratio (%.2f >= 1.0)", sharpe))
-	} else if sharpe <= 0.5 {
-		reasons = append(reasons, fmt.Sprintf("Weak Sharpe Ratio (%.2f <= 0.5)", sharpe))
+	switch {
+	case sharpe >= 1.0:
+		reasons = append(reasons, fmt.Sprintf(
+			"\u25b2 Sharpe Ratio: %.4f \u2014 strong risk-adjusted returns (threshold \u2265 1.0)\n"+
+				"  For every unit of total risk, this stock delivers solid excess returns above the\n"+
+				"  risk-free rate. A Sharpe above 1.0 signals that volatility is being well rewarded.",
+			sharpe))
+	case sharpe <= 0.5:
+		reasons = append(reasons, fmt.Sprintf(
+			"\u25bc Sharpe Ratio: %.4f \u2014 weak risk-adjusted returns (0.5\u20131.0 acceptable, \u2265 1.0 strong)\n"+
+				"  Not enough excess return is being generated relative to the total volatility carried.\n"+
+				"  Most quality large-cap equities sustain 0.5\u20131.0; above 1.0 is considered strong.",
+			sharpe))
 	}
-	if sortino >= 1.5 {
-		reasons = append(reasons, fmt.Sprintf("Strong Sortino Ratio (%.2f >= 1.5)", sortino))
-	} else if sortino <= 0.75 {
-		reasons = append(reasons, fmt.Sprintf("Weak Sortino Ratio (%.2f <= 0.75)", sortino))
+
+	switch {
+	case sortino >= 1.5:
+		reasons = append(reasons, fmt.Sprintf(
+			"\u25b2 Sortino Ratio: %.4f \u2014 strong downside-adjusted returns (threshold \u2265 1.5)\n"+
+				"  Unlike Sharpe, Sortino only penalizes harmful (downward) volatility. This high value\n"+
+				"  means gains are materially outpacing drawdowns \u2014 the volatility is mostly to the upside.",
+			sortino))
+	case sortino <= 0.75:
+		reasons = append(reasons, fmt.Sprintf(
+			"\u25bc Sortino Ratio: %.4f \u2014 weak downside-adjusted returns (0.75\u20131.5 acceptable, \u2265 1.5 strong)\n"+
+				"  Sortino only counts negative swings as risk. A value this low signals that the stock's\n"+
+				"  down-moves are disproportionately large relative to its gains \u2014 a poor risk profile.",
+			sortino))
 	}
-	if capm.Alpha > 0.02 {
-		reasons = append(reasons, fmt.Sprintf("Jensen's Alpha +%.2f%% (outperforming market this period)", capm.Alpha*100))
-	} else if capm.Alpha < -0.02 {
-		reasons = append(reasons, fmt.Sprintf("Jensen's Alpha %.2f%% (underperforming market this period)", capm.Alpha*100))
+
+	switch {
+	case capm.Alpha > 0.02:
+		reasons = append(reasons, fmt.Sprintf(
+			"\u25b2 Jensen's Alpha: +%.2f%% \u2014 beating the risk-adjusted market expectation\n"+
+				"  CAPM predicted +%.2f%% (beta %.2f against SPY's actual +%.2f%%). The stock\n"+
+				"  beat that by %.2f%%, suggesting idiosyncratic strengths beyond market exposure.",
+			capm.Alpha*100, capm.ExpectedReturn*100, capm.Beta, capm.ActualMarketReturn*100, capm.Alpha*100))
+	case capm.Alpha < -0.02:
+		reasons = append(reasons, fmt.Sprintf(
+			"\u25bc Jensen's Alpha: %.2f%% \u2014 below the risk-adjusted market expectation\n"+
+				"  CAPM predicted +%.2f%% (beta %.2f against SPY's actual +%.2f%%). The stock\n"+
+				"  fell short by %.2f%%, absorbing excess market sensitivity without commensurate reward.",
+			capm.Alpha*100, capm.ExpectedReturn*100, capm.Beta, capm.ActualMarketReturn*100, -capm.Alpha*100))
 	}
+
 	switch ma.Trend {
 	case models.Bullish:
-		reasons = append(reasons, "Bullish MA crossover (EMA12 > EMA26, SMA20 > SMA50, MACD > Signal)")
+		reasons = append(reasons, fmt.Sprintf(
+			"\u25b2 Moving Averages: BULLISH \u2014 momentum indicators broadly agree\n"+
+				"  SMA20 (%.2f) > SMA50 (%.2f): price is above its medium-term trend.\n"+
+				"  EMA12 (%.2f) > EMA26 (%.2f): short-term momentum is accelerating.\n"+
+				"  MACD (%.4f) > Signal (%.4f): buy pressure building.",
+			ma.SMA20, ma.SMA50, ma.EMA12, ma.EMA26, ma.MACD, ma.Signal))
 	case models.Bearish:
-		reasons = append(reasons, "Bearish MA crossover (EMA12 < EMA26, SMA20 < SMA50, MACD < Signal)")
+		reasons = append(reasons, fmt.Sprintf(
+			"\u25bc Moving Averages: BEARISH \u2014 momentum indicators broadly agree\n"+
+				"  SMA20 (%.2f) < SMA50 (%.2f): price is below its medium-term trend.\n"+
+				"  EMA12 (%.2f) < EMA26 (%.2f): short-term momentum is declining.\n"+
+				"  MACD (%.4f) < Signal (%.4f): sell pressure building.",
+			ma.SMA20, ma.SMA50, ma.EMA12, ma.EMA26, ma.MACD, ma.Signal))
 	}
+
 	switch {
 	case rsi < 30:
-		reasons = append(reasons, fmt.Sprintf("RSI %.1f -- oversold territory (contrarian buy signal)", rsi))
+		reasons = append(reasons, fmt.Sprintf(
+			"\u25b2 RSI (14): %.1f \u2014 oversold territory (< 30 is a contrarian buy signal)\n"+
+				"  The stock has been sold aggressively enough that a mean-reversion bounce is\n"+
+				"  historically more likely from here. Oversold can persist in sustained downtrends;\n"+
+				"  treat as a supporting signal alongside trend and fundamental analysis.",
+			rsi))
 	case rsi > 70:
-		reasons = append(reasons, fmt.Sprintf("RSI %.1f -- overbought territory (contrarian sell signal)", rsi))
+		reasons = append(reasons, fmt.Sprintf(
+			"\u25bc RSI (14): %.1f \u2014 overbought territory (> 70 is a contrarian sell signal)\n"+
+				"  The stock has rallied sharply and near-term pullback risk is elevated. Overbought\n"+
+				"  readings often precede consolidation or correction, particularly when paired\n"+
+				"  with stretched valuations or deteriorating MACD momentum.",
+			rsi))
 	}
+
 	switch pe {
 	case models.Cheap:
-		reasons = append(reasons, fmt.Sprintf("Attractive valuation (P/E %.1f < 18)", peRatio))
+		reasons = append(reasons, fmt.Sprintf(
+			"\u25b2 P/E Ratio: %.1fx \u2014 attractively valued (< 18 is considered cheap)\n"+
+				"  Low P/E can signal genuine undervaluation or a stock that has fallen out of favor.\n"+
+				"  Worth investigating whether the discount reflects a temporary headwind or a\n"+
+				"  structural issue before treating it as a margin-of-safety opportunity.",
+			peRatio))
 	case models.Expensive:
-		reasons = append(reasons, fmt.Sprintf("Stretched valuation (P/E %.1f > 30)", peRatio))
+		reasons = append(reasons, fmt.Sprintf(
+			"\u25bc P/E Ratio: %.1fx \u2014 growth-priced (> 30 is considered expensive)\n"+
+				"  Investors are paying ~%.0fx trailing earnings, pricing in strong future growth.\n"+
+				"  At this multiple, any earnings deceleration or guidance cut can trigger sharp\n"+
+				"  multiple compression. Sustainable only if growth execution remains consistent.",
+			peRatio, peRatio))
 	}
 
 	if score >= 3 {
