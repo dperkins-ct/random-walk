@@ -108,15 +108,15 @@ func (h *Handler) FetchOverview(ticker string) (indicators.Overview, error) {
 	}
 
 	var raw struct {
-		Symbol       string `json:"Symbol"`
-		Name         string `json:"Name"`
-		Sector       string `json:"Sector"`
-		PERatio      string `json:"PERatio"`
-		ForwardPE    string `json:"ForwardPE"`
-		PEGRatio     string `json:"PEGRatio"`
-		DebtToEquity string `json:"DebtToEquityRatio"`
-		ROE          string `json:"ReturnOnEquityTTM"`
-		Note         string `json:"Note"`
+		Symbol      string `json:"Symbol"`
+		Name        string `json:"Name"`
+		Sector      string `json:"Sector"`
+		PERatio     string `json:"PERatio"`
+		ForwardPE   string `json:"ForwardPE"`
+		PEGRatio    string `json:"PEGRatio"`
+		PriceToBook string `json:"PriceToBookRatio"`
+		ROE         string `json:"ReturnOnEquityTTM"`
+		Note        string `json:"Note"`
 	}
 	if err := json.Unmarshal(body, &raw); err != nil {
 		return indicators.Overview{}, fmt.Errorf("parse overview for %s: %w", ticker, err)
@@ -132,7 +132,7 @@ func (h *Handler) FetchOverview(ticker string) (indicators.Overview, error) {
 	ov.PERatio, _ = strconv.ParseFloat(raw.PERatio, 64)
 	ov.ForwardPE, _ = strconv.ParseFloat(raw.ForwardPE, 64)
 	ov.PEGRatio, _ = strconv.ParseFloat(raw.PEGRatio, 64)
-	ov.DebtToEquity, _ = strconv.ParseFloat(raw.DebtToEquity, 64)
+	ov.PriceToBook, _ = strconv.ParseFloat(raw.PriceToBook, 64)
 	ov.ROE, _ = strconv.ParseFloat(raw.ROE, 64)
 	return ov, nil
 }

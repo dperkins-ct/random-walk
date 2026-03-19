@@ -128,7 +128,7 @@ func WriteOverview(ticker string, ov indicators.Overview) error {
 	}
 	defer f.Close()
 	w := csv.NewWriter(f)
-	_ = w.Write([]string{"symbol", "name", "sector", "pe_ratio", "forward_pe", "peg_ratio", "debt_to_equity", "roe"})
+	_ = w.Write([]string{"symbol", "name", "sector", "pe_ratio", "forward_pe", "peg_ratio", "price_to_book", "roe"})
 	_ = w.Write([]string{
 		ov.Symbol,
 		ov.Name,
@@ -136,7 +136,7 @@ func WriteOverview(ticker string, ov indicators.Overview) error {
 		strconv.FormatFloat(ov.PERatio, 'f', 4, 64),
 		strconv.FormatFloat(ov.ForwardPE, 'f', 4, 64),
 		strconv.FormatFloat(ov.PEGRatio, 'f', 4, 64),
-		strconv.FormatFloat(ov.DebtToEquity, 'f', 4, 64),
+		strconv.FormatFloat(ov.PriceToBook, 'f', 4, 64),
 		strconv.FormatFloat(ov.ROE, 'f', 4, 64),
 	})
 	w.Flush()
@@ -173,7 +173,7 @@ func ReadOverview(ticker string) (indicators.Overview, error) {
 	ov.PERatio, _ = strconv.ParseFloat(row[3], 64)
 	ov.ForwardPE, _ = strconv.ParseFloat(row[4], 64)
 	ov.PEGRatio, _ = strconv.ParseFloat(row[5], 64)
-	ov.DebtToEquity, _ = strconv.ParseFloat(row[6], 64)
+	ov.PriceToBook, _ = strconv.ParseFloat(row[6], 64)
 	ov.ROE, _ = strconv.ParseFloat(row[7], 64)
 	return ov, nil
 }

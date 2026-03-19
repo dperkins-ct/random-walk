@@ -30,6 +30,13 @@ func OnBalanceVolume(prices []DailyPrice) (OBVResult, ModelSignal) {
 
 	currentOBV := int64(obvSeries[len(obvSeries)-1])
 
+	// Average daily volume over the full window (used to normalize slope).
+	volSum := 0.0
+	for _, p := range prices {
+		volSum += float64(p.Volume)
+	}
+	avgVol := volSum / float64(len(prices))
+
 	// 20-day linear regression slope on the last 20 OBV values.
 	const slopePeriod = 20
 	slope := 0.0
@@ -38,7 +45,7 @@ func OnBalanceVolume(prices []DailyPrice) (OBVResult, ModelSignal) {
 		slope = linearSlope(window)
 	}
 
-	res := OBVResult{OBV: currentOBV, Slope: slope}
+	res := OBVResult{OBV: currentOBV, Slope: slope, AvgDailyVolume: avgVol}
 
 	var sig ModelSignal
 	switch {

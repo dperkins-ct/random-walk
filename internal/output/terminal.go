@@ -214,7 +214,7 @@ func Print(result indicators.AnalysisResult) {
 	fmt.Println()
 
 	// --- Fundamentals (only when data is available) -----------------------
-	if result.Fundamentals.PEGRatio > 0 || result.Fundamentals.DebtToEquity > 0 {
+	if result.Fundamentals.PEGRatio > 0 || result.Fundamentals.PriceToBook > 0 {
 		fmt.Println(bold("  FUNDAMENTALS"))
 		fmt.Println("  " + strings.Repeat("\u00b7", lineWidth-2))
 
@@ -225,12 +225,12 @@ func Print(result indicators.AnalysisResult) {
 		pegRef := dim("< 1 undervalued | 1-2 fair | > 2 stretched")
 		printRow("PEG Ratio", colorPEG(result.Fundamentals.PEGRatio), pegRaw, pegRef)
 
-		deRaw := "N/A"
-		if result.Fundamentals.DebtToEquity > 0 {
-			deRaw = fmt.Sprintf("%.2f", result.Fundamentals.DebtToEquity)
+		pbRaw := "N/A"
+		if result.Fundamentals.PriceToBook > 0 {
+			pbRaw = fmt.Sprintf("%.2f", result.Fundamentals.PriceToBook)
 		}
-		deRef := dim("< 0.5 conservative | > 1.5 high leverage")
-		printRow("Debt-to-Equity", colorDE(result.Fundamentals.DebtToEquity), deRaw, deRef)
+		pbRef := dim("< 1 below book | 1-4 normal | > 4 premium")
+		printRow("Price-to-Book (P/B)", colorPB(result.Fundamentals.PriceToBook), pbRaw, pbRef)
 
 		if result.Fundamentals.ROE != 0 {
 			roeRaw := fmt.Sprintf("%.1f%%", result.Fundamentals.ROE*100)
@@ -253,10 +253,13 @@ func Print(result indicators.AnalysisResult) {
 	printSig("Relative Strength:", signalStr(result.RSSignal))
 	printSig("Max Drawdown:", signalStr(result.DrawdownSignal))
 	printSig("Value at Risk:", signalStr(result.VaRSignal))
-	if result.Fundamentals.PEGRatio > 0 || result.Fundamentals.DebtToEquity > 0 {
+	if result.Fundamentals.PEGRatio > 0 || result.Fundamentals.PriceToBook > 0 {
 		printSig("Fundamentals (PEG/D/E):", signalStr(result.FundamentalsSignal))
 	}
-	fmt.Printf("  %-28s %d / %d\n", "Composite Score:", result.CompositeScore, result.MaxScore)
+
+	fmt.Printf("  %-28s %.1f  %s\n",
+		"Composite Score:", result.CompositeScore,
+		dim(fmt.Sprintf("(range \u2212%.1f to +%.1f | BUY \u2265 6.0 | SELL \u2264 \u22126.0)", result.MaxScore, result.MaxScore)))
 	fmt.Println()
 
 	// --- Recommendation ---------------------------------------------------
@@ -457,15 +460,15 @@ func colorPEG(v float64) string {
 	}
 }
 
-func colorDE(v float64) string {
+func colorPB(v float64) string {
 	if v <= 0 {
 		return yellow("N/A")
 	}
 	s := fmt.Sprintf("%.2f", v)
 	switch {
-	case v < 0.5:
+	case v < 1.0:
 		return green(s)
-	case v <= 1.5:
+	case v <= 4.0:
 		return yellow(s)
 	default:
 		return red(s)

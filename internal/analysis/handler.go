@@ -6,6 +6,18 @@ import (
 	"github.com/dperkins-ct/random-walk/internal/indicators"
 )
 
+var raw struct {
+	Symbol      string `json:"Symbol"`
+	Name        string `json:"Name"`
+	Sector      string `json:"Sector"`
+	PERatio     string `json:"PERatio"`
+	ForwardPE   string `json:"ForwardPE"`
+	PEGRatio    string `json:"PEGRatio"`
+	PriceToBook string `json:"PriceToBookRatio"`
+	ROE         string `json:"ReturnOnEquityTTM"`
+	Note        string `json:"Note"`
+}
+
 // Handler orchestrates all analysis indicators.
 type Handler struct {
 	annualRiskFreeRate float64
@@ -86,11 +98,36 @@ func (h *Handler) Analyze(
 	rsiSignalVal := indicators.RSISignal(rsi)
 	peSignalVal := indicators.ModelSignal(peSignal)
 
-	const maxScore = 12
-	composite := int(sharpeSignal) + int(sortinoSignal) + int(capmSignal) +
-		int(maSignalVal) + int(rsiSignalVal) + int(peSignalVal) +
-		int(bollingerSig) + int(obvSig) + int(rsSig) +
-		int(drawdownSig) + int(varSig) + int(fundResult.Combined)
+	// Weights: reflect how essential each signal is for stock value analysis.
+	// High (2.0): CAPM outperformance, comprehensive trend, market-relative return.
+	// Mid  (1.5): drawdown risk, combined fundamental valuation.
+	// Std  (1.0): Sharpe, Sortino, RSI, P/E, Bollinger, VaR.
+	// Low  (0.5): OBV (volume confirmation only).
+	const (
+		wHigh = 2.0
+		wMid  = 1.5
+		wStd  = 1.0
+		wLow  = 0.5
+	)
+	const maxScore = wStd + wStd + wHigh + wHigh + wStd + wStd +
+		wStd + wLow + wHigh + wMid + wStd + wMid // = 15.5
+
+	// Each term is a continuous value in [-1, +1] derived from the raw metric,
+	// then scaled by its weight. This gives the composite finer resolution than
+	// the previous +1/0/-1 binary vote — a Sharpe of 0.9 now scores differently
+	// from 0.51, and an RSI of 28 scores differently from 31.
+	composite := wStd*indicators.NormalizeSharpe(sharpe) +
+		wStd*indicators.NormalizeSortino(sortino) +
+		wHigh*indicators.NormalizeAlpha(capmResult.Alpha) +
+		wHigh*indicators.NormalizeMA(maResult) +
+		wStd*indicators.NormalizeRSI(rsi) +
+		wStd*indicators.NormalizePE(overview.PERatio) +
+		wStd*indicators.NormalizeBollingerPctB(bollingerResult.PctB) +
+		wLow*indicators.NormalizeOBVSlope(obvResult.Slope, obvResult.AvgDailyVolume) +
+		wHigh*indicators.NormalizeRS(rsResult.VsSPY) +
+		wMid*indicators.NormalizeMaxDrawdown(drawdownResult.MaxDrawdown) +
+		wStd*indicators.NormalizeVaR(varResult.VaR95) +
+		wMid*indicators.NormalizeFundamentals(fundResult.PEGRatio, fundResult.PriceToBook)
 
 	recommendation, reasons := recommend(
 		composite, sharpe, sortino, capmResult, maResult, rsi, peSignal, overview.PERatio,
@@ -162,7 +199,7 @@ func scoreCAPM(r indicators.CAPMResult) indicators.ModelSignal {
 }
 
 func recommend(
-	score int,
+	score float64,
 	sharpe, sortino float64,
 	capm indicators.CAPMResult,
 	ma indicators.MAResult,
@@ -364,28 +401,28 @@ func recommend(
 	}
 
 	// Fundamentals reason (only when data is available).
-	if fund.PEGRatio > 0 || fund.DebtToEquity > 0 {
+	if fund.PEGRatio > 0 || fund.PriceToBook > 0 {
 		switch fund.Combined {
 		case indicators.SignalBuy:
 			reasons = append(reasons, fmt.Sprintf(
 				"\u25b2 Fundamentals: %s\n"+
 					"  PEG %.2f (< 1 = growth underpriced) | D/E %.2f (< 0.5 = conservative leverage)\n"+
 					"  ROE: %.1f%% \u2014 return on shareholders' equity.",
-				fundSummary(fund), fund.PEGRatio, fund.DebtToEquity, fund.ROE*100))
+				fundSummary(fund), fund.PEGRatio, fund.PriceToBook, fund.ROE*100))
 		case indicators.SignalSell:
 			reasons = append(reasons, fmt.Sprintf(
 				"\u25bc Fundamentals: %s\n"+
 					"  PEG %.2f (> 2 = growth premium stretched) | D/E %.2f (> 1.5 = high leverage)\n"+
 					"  ROE: %.1f%% \u2014 return on shareholders' equity.",
-				fundSummary(fund), fund.PEGRatio, fund.DebtToEquity, fund.ROE*100))
+				fundSummary(fund), fund.PEGRatio, fund.PriceToBook, fund.ROE*100))
 		}
 	}
 
-	// Recalibrated thresholds for 12 total signals.
-	if score >= 5 {
+	// Thresholds: roughly ±40% of max weighted score (15.5).
+	if score >= 6.0 {
 		return indicators.Buy, reasons
 	}
-	if score <= -5 {
+	if score <= -6.0 {
 		return indicators.Sell, reasons
 	}
 	return indicators.Hold, reasons
@@ -400,14 +437,16 @@ func sqeezeHint(bw float64) string {
 
 func fundSummary(f indicators.FundamentalsResult) string {
 	buys, sells := 0, 0
-	if f.PEGSignal == indicators.SignalBuy {
+	switch f.PEGSignal {
+	case indicators.SignalBuy:
 		buys++
-	} else if f.PEGSignal == indicators.SignalSell {
+	case indicators.SignalSell:
 		sells++
 	}
-	if f.DERatioSignal == indicators.SignalBuy {
+	switch f.PBSignal {
+	case indicators.SignalBuy:
 		buys++
-	} else if f.DERatioSignal == indicators.SignalSell {
+	case indicators.SignalSell:
 		sells++
 	}
 	switch {

@@ -13,14 +13,14 @@ type DailyPrice struct {
 
 // Overview holds fundamental data from the Alpha Vantage OVERVIEW endpoint.
 type Overview struct {
-	Symbol       string
-	Name         string
-	Sector       string
-	PERatio      float64
-	ForwardPE    float64
-	PEGRatio     float64
-	DebtToEquity float64
-	ROE          float64
+	Symbol      string
+	Name        string
+	Sector      string
+	PERatio     float64
+	ForwardPE   float64
+	PEGRatio    float64
+	PriceToBook float64
+	ROE         float64
 }
 
 // CAPMResult holds the output of the CAPM model.
@@ -89,8 +89,9 @@ type BollingerResult struct {
 
 // OBVResult holds On-Balance Volume output.
 type OBVResult struct {
-	OBV   int64
-	Slope float64 // 20-day linear slope of OBV (positive = accumulation)
+	OBV            int64
+	Slope          float64 // 20-day linear slope of OBV (positive = accumulation)
+	AvgDailyVolume float64 // mean daily volume over the period (used to normalize slope)
 }
 
 // RSResult holds Relative Strength output.
@@ -113,12 +114,12 @@ type VaRResult struct {
 
 // FundamentalsResult holds the extended fundamental scoring output.
 type FundamentalsResult struct {
-	PEGRatio      float64
-	DebtToEquity  float64
-	ROE           float64
-	PEGSignal     ModelSignal
-	DERatioSignal ModelSignal
-	Combined      ModelSignal
+	PEGRatio    float64
+	PriceToBook float64
+	ROE         float64
+	PEGSignal   ModelSignal
+	PBSignal    ModelSignal
+	Combined    ModelSignal
 }
 
 // AnalysisResult holds the full output of all models plus the final recommendation.
@@ -156,8 +157,8 @@ type AnalysisResult struct {
 	VaRSignal          ModelSignal
 	FundamentalsSignal ModelSignal
 
-	CompositeScore int
-	MaxScore       int
+	CompositeScore float64
+	MaxScore       float64
 	Recommendation Recommendation
 	Reasons        []string
 }

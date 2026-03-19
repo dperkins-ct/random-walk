@@ -1,29 +1,27 @@
 package indicators
 
-// EvaluateFundamentals scores PEG Ratio and Debt-to-Equity and returns a
+// EvaluateFundamentals scores PEG Ratio and Price-to-Book and returns a
 // combined signal.
 //
 // PEG Ratio:
 //
-//	< 1.0   → BUY  (growth not yet priced in)
-//	1.0–2.0 → HOLD (fairly valued relative to growth)
-//	> 2.0   → SELL (growth premium is stretched)
-//	0       → unscored (data unavailable)
+//	< 1.0     → BUY  (growth not yet priced in)
+//	1.0–2.0   → HOLD (fairly valued relative to growth)
+//	> 2.0     → SELL (growth premium is stretched)
 //
-// Debt-to-Equity:
+// Price-to-Book (P/B):
 //
-//	< 0.5   → BUY  (conservatively financed)
-//	0.5–1.5 → HOLD (manageable leverage)
-//	> 1.5   → SELL (high leverage risk)
-//	0       → unscored (data unavailable)
+//	< 1.0     → BUY  (trading below book value — potentially very cheap)
+//	1.0–4.0   → HOLD (normal range across most sectors)
+//	> 4.0     → SELL (high premium to assets; priced for perfection)
 //
-// Combined signal: average of available sub-signals (rounded). If neither
-// metric is available the signal is HOLD.
+// Combined signal: average of available sub-signals (rounded).
+// If neither metric is available the signal is HOLD.
 func EvaluateFundamentals(ov Overview) FundamentalsResult {
 	res := FundamentalsResult{
-		PEGRatio:     ov.PEGRatio,
-		DebtToEquity: ov.DebtToEquity,
-		ROE:          ov.ROE,
+		PEGRatio:    ov.PEGRatio,
+		PriceToBook: ov.PriceToBook,
+		ROE:         ov.ROE,
 	}
 
 	scoredCount := 0
@@ -35,9 +33,9 @@ func EvaluateFundamentals(ov Overview) FundamentalsResult {
 		scoredCount++
 	}
 
-	if ov.DebtToEquity > 0 {
-		res.DERatioSignal = scoreDE(ov.DebtToEquity)
-		scoreSum += int(res.DERatioSignal)
+	if ov.PriceToBook > 0 {
+		res.PBSignal = scorePB(ov.PriceToBook)
+		scoreSum += int(res.PBSignal)
 		scoredCount++
 	}
 
@@ -69,11 +67,11 @@ func scorePEG(peg float64) ModelSignal {
 	}
 }
 
-func scoreDE(de float64) ModelSignal {
+func scorePB(pb float64) ModelSignal {
 	switch {
-	case de < 0.5:
+	case pb < 1.0:
 		return SignalBuy
-	case de > 1.5:
+	case pb > 4.0:
 		return SignalSell
 	default:
 		return SignalHold
