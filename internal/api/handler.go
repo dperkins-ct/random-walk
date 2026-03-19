@@ -28,11 +28,13 @@ func NewHandler(apiKey string) *Handler {
 	}
 }
 
-// FetchPrices fetches daily adjusted prices for ticker.
+// FetchPrices fetches daily prices for ticker using the free TIME_SERIES_DAILY
+// endpoint. The free tier does not provide an adjusted close, so Close is used
+// for both Close and AdjClose in all downstream calculations.
 // outputSize must be "compact" (last 100 days) or "full" (20+ years).
 func (h *Handler) FetchPrices(ticker, outputSize string) ([]models.DailyPrice, error) {
 	url := fmt.Sprintf(
-		"%s?function=TIME_SERIES_DAILY_ADJUSTED&symbol=%s&outputsize=%s&apikey=%s",
+		"%s?function=TIME_SERIES_DAILY&symbol=%s&outputsize=%s&apikey=%s",
 		baseURL, ticker, outputSize, h.apiKey,
 	)
 	resp, err := h.httpClient.Get(url)
@@ -47,12 +49,11 @@ func (h *Handler) FetchPrices(ticker, outputSize string) ([]models.DailyPrice, e
 	}
 
 	type dailyEntry struct {
-		Open     string `json:"1. open"`
-		High     string `json:"2. high"`
-		Low      string `json:"3. low"`
-		Close    string `json:"4. close"`
-		AdjClose string `json:"5. adjusted close"`
-		Volume   string `json:"6. volume"`
+		Open   string `json:"1. open"`
+		High   string `json:"2. high"`
+		Low    string `json:"3. low"`
+		Close  string `json:"4. close"`
+		Volume string `json:"5. volume"`
 	}
 	var raw struct {
 		Note            string                `json:"Note"`
@@ -79,7 +80,7 @@ func (h *Handler) FetchPrices(ticker, outputSize string) ([]models.DailyPrice, e
 		p.High, _ = strconv.ParseFloat(vals.High, 64)
 		p.Low, _ = strconv.ParseFloat(vals.Low, 64)
 		p.Close, _ = strconv.ParseFloat(vals.Close, 64)
-		p.AdjClose, _ = strconv.ParseFloat(vals.AdjClose, 64)
+		p.AdjClose = p.Close // free tier has no adjusted close; use close
 		v, _ := strconv.ParseInt(vals.Volume, 10, 64)
 		p.Volume = v
 		prices = append(prices, p)

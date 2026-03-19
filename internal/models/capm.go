@@ -5,16 +5,19 @@ package models
 func alignedReturns(stock, market []DailyPrice) ([]float64, []float64) {
 	mktMap := make(map[string]float64, len(market))
 	for i := 1; i < len(market); i++ {
-		r := (market[i].AdjClose - market[i-1].AdjClose) / market[i-1].AdjClose
-		mktMap[market[i].Date] = r
+		if market[i-1].AdjClose > 0 {
+			mktMap[market[i].Date] = (market[i].AdjClose - market[i-1].AdjClose) / market[i-1].AdjClose
+		}
 	}
 	var sReturns, mReturns []float64
 	for i := 1; i < len(stock); i++ {
 		date := stock[i].Date
 		if mktReturn, ok := mktMap[date]; ok {
-			sReturn := (stock[i].AdjClose - stock[i-1].AdjClose) / stock[i-1].AdjClose
-			sReturns = append(sReturns, sReturn)
-			mReturns = append(mReturns, mktReturn)
+			if stock[i-1].AdjClose > 0 {
+				sReturn := (stock[i].AdjClose - stock[i-1].AdjClose) / stock[i-1].AdjClose
+				sReturns = append(sReturns, sReturn)
+				mReturns = append(mReturns, mktReturn)
+			}
 		}
 	}
 	return sReturns, mReturns
@@ -48,21 +51,28 @@ func variance(xs []float64) float64 {
 	return v / float64(len(xs))
 }
 
-// CAPM computes Beta, Expected Return (via CAPM), and Jensen's Alpha.
-// stockPrices and marketPrices must be chronological (oldest first).
-// annualRiskFreeRate and annualMarketReturn should be decimal (e.g. 0.043).
-func CAPM(stockPrices, marketPrices []DailyPrice, annualRiskFreeRate, annualMarketReturn float64) CAPMResult {
+// CAPM computes Beta, Expected Return, and Jensen's Alpha for a stock.
+// It uses the actual realised market return from the period
+// (mean(mktDailyReturns) x 252) rather than a long-run constant, so Alpha
+// answers the question: "did this stock beat the market on a risk-adjusted
+// basis over this specific period?"
+func CAPM(stockPrices, marketPrices []DailyPrice, annualRiskFreeRate float64) CAPMResult {
 	sReturns, mReturns := alignedReturns(stockPrices, marketPrices)
 	if len(sReturns) < 2 {
 		return CAPMResult{}
 	}
+
 	beta := covariance(sReturns, mReturns) / variance(mReturns)
-	expectedReturn := annualRiskFreeRate + beta*(annualMarketReturn-annualRiskFreeRate)
-	actualAnnualReturn := mean(sReturns) * 252
-	alpha := actualAnnualReturn - expectedReturn
+
+	actualMktReturn := mean(mReturns) * 252
+	expectedReturn := annualRiskFreeRate + beta*(actualMktReturn-annualRiskFreeRate)
+	actualStockReturn := mean(sReturns) * 252
+	alpha := actualStockReturn - expectedReturn
+
 	return CAPMResult{
-		Beta:           beta,
-		ExpectedReturn: expectedReturn,
-		Alpha:          alpha,
+		Beta:               beta,
+		ActualMarketReturn: actualMktReturn,
+		ExpectedReturn:     expectedReturn,
+		Alpha:              alpha,
 	}
 }

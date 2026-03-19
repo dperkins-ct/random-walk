@@ -3,3 +3,6 @@ random-walk
 
 # Go module download cache
 vendor/
+
+#env file
+.env

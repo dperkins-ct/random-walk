@@ -29,7 +29,6 @@ func Print(result models.AnalysisResult) {
 	fmt.Println()
 	fmt.Println(bold(cyan(divider())))
 
-	// Header
 	name := result.Name
 	if name == "" {
 		name = result.Ticker
@@ -40,11 +39,12 @@ func Print(result models.AnalysisResult) {
 	}
 	fmt.Println(bold(cyan(divider())))
 
-	// Metrics
+	// --- Metrics ----------------------------------------------------------
 	fmt.Println(bold("  METRICS"))
 	printMetric("Sharpe Ratio (annualized):", fmt.Sprintf("%.4f", result.SharpeRatio))
 	printMetric("Sortino Ratio (annualized):", fmt.Sprintf("%.4f", result.SortinoRatio))
 	printMetric("Beta:", fmt.Sprintf("%.4f", result.CAP.Beta))
+	printMetric("Market Return (period):", pct(result.CAP.ActualMarketReturn))
 	printMetric("CAPM Expected Return:", pct(result.CAP.ExpectedReturn))
 	printMetric("Jensen's Alpha:", pct(result.CAP.Alpha))
 	printMetric("SMA20:", fmt.Sprintf("%.4f", result.MA.SMA20))
@@ -53,6 +53,14 @@ func Print(result models.AnalysisResult) {
 	printMetric("EMA26:", fmt.Sprintf("%.4f", result.MA.EMA26))
 	printMetric("MACD:", fmt.Sprintf("%.4f", result.MA.MACD))
 	printMetric("MACD Signal Line:", fmt.Sprintf("%.4f", result.MA.Signal))
+	rsiStr := fmt.Sprintf("%.2f", result.RSI)
+	switch {
+	case result.RSI < 30:
+		rsiStr += "  (oversold)"
+	case result.RSI > 70:
+		rsiStr += "  (overbought)"
+	}
+	printMetric("RSI (14):", rsiStr)
 	peStr := "N/A"
 	if result.PERatio > 0 {
 		peStr = fmt.Sprintf("%.2f", result.PERatio)
@@ -60,17 +68,18 @@ func Print(result models.AnalysisResult) {
 	printMetric("P/E Ratio:", peStr)
 	fmt.Println()
 
-	// Signals
+	// --- Signals ----------------------------------------------------------
 	fmt.Println(bold("  SIGNALS"))
 	printMetric("Sharpe:", signalStr(result.SharpeSignal))
 	printMetric("Sortino:", signalStr(result.SortinoSignal))
 	printMetric("CAPM (Jensen's Alpha):", signalStr(result.CAPMSignal))
 	printMetric("Moving Averages:", signalStr(result.MASignalVal))
+	printMetric("RSI (14):", signalStr(result.RSISignal))
 	printMetric("P/E Valuation:", signalStr(result.PESignalVal))
-	fmt.Printf("  %-30s %d / 5\n", "Composite Score:", result.CompositeScore)
+	fmt.Printf("  %-30s %d / %d\n", "Composite Score:", result.CompositeScore, result.MaxScore)
 	fmt.Println()
 
-	// Recommendation
+	// --- Recommendation ---------------------------------------------------
 	fmt.Println(bold(cyan(divider())))
 	recColor := recColorFn(result.Recommendation)
 	fmt.Printf("  RECOMMENDATION:  %s\n", bold(recColor(string(result.Recommendation))))

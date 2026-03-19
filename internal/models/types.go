@@ -22,9 +22,10 @@ type Overview struct {
 
 // CAPMResult holds the output of the CAPM model.
 type CAPMResult struct {
-	Beta           float64
-	ExpectedReturn float64
-	Alpha          float64
+	Beta               float64
+	ActualMarketReturn float64 // annualised, realised over the period
+	ExpectedReturn     float64 // annualised, CAPM-predicted
+	Alpha              float64 // Jensen's alpha (actual - expected)
 }
 
 // MASignal represents a directional signal from moving average analysis.
@@ -84,6 +85,7 @@ type AnalysisResult struct {
 	SortinoRatio float64
 	CAP          CAPMResult
 	MA           MAResult
+	RSI          float64
 	PERatio      float64
 	PESig        PESignal
 
@@ -91,9 +93,11 @@ type AnalysisResult struct {
 	SortinoSignal ModelSignal
 	CAPMSignal    ModelSignal
 	MASignalVal   ModelSignal
+	RSISignal     ModelSignal
 	PESignalVal   ModelSignal
 
 	CompositeScore int
+	MaxScore       int
 	Recommendation Recommendation
 	Reasons        []string
 }
