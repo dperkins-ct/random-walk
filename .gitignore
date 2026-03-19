@@ -1,0 +1,5 @@
+# Build output
+random-walk
+
+# Go module download cache
+vendor/
