@@ -8,7 +8,7 @@ import (
 	"strconv"
 	"time"
 
-	"github.com/dperkins-ct/random-walk/internal/models"
+	"github.com/dperkins-ct/random-walk/internal/indicators"
 )
 
 func cacheDir() (string, error) {
@@ -51,7 +51,7 @@ func IsFresh(path string) bool {
 }
 
 // WritePrices persists a slice of DailyPrice to a CSV file.
-func WritePrices(ticker string, prices []models.DailyPrice) error {
+func WritePrices(ticker string, prices []indicators.DailyPrice) error {
 	path, err := pricesPath(ticker)
 	if err != nil {
 		return err
@@ -79,7 +79,7 @@ func WritePrices(ticker string, prices []models.DailyPrice) error {
 }
 
 // ReadPrices loads daily prices from the CSV cache.
-func ReadPrices(ticker string) ([]models.DailyPrice, error) {
+func ReadPrices(ticker string) ([]indicators.DailyPrice, error) {
 	path, err := pricesPath(ticker)
 	if err != nil {
 		return nil, err
@@ -94,12 +94,12 @@ func ReadPrices(ticker string) ([]models.DailyPrice, error) {
 	if err != nil {
 		return nil, fmt.Errorf("cannot parse cache CSV: %w", err)
 	}
-	prices := make([]models.DailyPrice, 0, len(rows)-1)
+	prices := make([]indicators.DailyPrice, 0, len(rows)-1)
 	for _, row := range rows[1:] {
 		if len(row) < 7 {
 			continue
 		}
-		p := models.DailyPrice{Date: row[0]}
+		p := indicators.DailyPrice{Date: row[0]}
 		p.Open, _ = strconv.ParseFloat(row[1], 64)
 		p.High, _ = strconv.ParseFloat(row[2], 64)
 		p.Low, _ = strconv.ParseFloat(row[3], 64)
@@ -117,7 +117,7 @@ func PricesCachePath(ticker string) (string, error) {
 }
 
 // WriteOverview persists an Overview to a single-row CSV.
-func WriteOverview(ticker string, ov models.Overview) error {
+func WriteOverview(ticker string, ov indicators.Overview) error {
 	path, err := overviewPath(ticker)
 	if err != nil {
 		return err
@@ -128,44 +128,53 @@ func WriteOverview(ticker string, ov models.Overview) error {
 	}
 	defer f.Close()
 	w := csv.NewWriter(f)
-	_ = w.Write([]string{"symbol", "name", "sector", "pe_ratio", "forward_pe"})
+	_ = w.Write([]string{"symbol", "name", "sector", "pe_ratio", "forward_pe", "peg_ratio", "debt_to_equity", "roe"})
 	_ = w.Write([]string{
 		ov.Symbol,
 		ov.Name,
 		ov.Sector,
 		strconv.FormatFloat(ov.PERatio, 'f', 4, 64),
 		strconv.FormatFloat(ov.ForwardPE, 'f', 4, 64),
+		strconv.FormatFloat(ov.PEGRatio, 'f', 4, 64),
+		strconv.FormatFloat(ov.DebtToEquity, 'f', 4, 64),
+		strconv.FormatFloat(ov.ROE, 'f', 4, 64),
 	})
 	w.Flush()
 	return w.Error()
 }
 
 // ReadOverview loads an Overview from the CSV cache.
-func ReadOverview(ticker string) (models.Overview, error) {
+// Old cache files with fewer than 8 columns are treated as missing (return error)
+// so the caller re-fetches and writes the extended format.
+func ReadOverview(ticker string) (indicators.Overview, error) {
 	path, err := overviewPath(ticker)
 	if err != nil {
-		return models.Overview{}, err
+		return indicators.Overview{}, err
 	}
 	f, err := os.Open(path)
 	if err != nil {
-		return models.Overview{}, err
+		return indicators.Overview{}, err
 	}
 	defer f.Close()
 	r := csv.NewReader(f)
 	rows, err := r.ReadAll()
 	if err != nil {
-		return models.Overview{}, err
+		return indicators.Overview{}, err
 	}
 	if len(rows) < 2 {
-		return models.Overview{}, fmt.Errorf("empty overview cache")
+		return indicators.Overview{}, fmt.Errorf("empty overview cache")
 	}
+	// Require 8 columns; older 5-column caches trigger a re-fetch.
 	row := rows[1]
-	if len(row) < 5 {
-		return models.Overview{}, fmt.Errorf("malformed overview cache")
+	if len(row) < 8 {
+		return indicators.Overview{}, fmt.Errorf("stale overview cache (missing extended columns)")
 	}
-	ov := models.Overview{Symbol: row[0], Name: row[1], Sector: row[2]}
+	ov := indicators.Overview{Symbol: row[0], Name: row[1], Sector: row[2]}
 	ov.PERatio, _ = strconv.ParseFloat(row[3], 64)
 	ov.ForwardPE, _ = strconv.ParseFloat(row[4], 64)
+	ov.PEGRatio, _ = strconv.ParseFloat(row[5], 64)
+	ov.DebtToEquity, _ = strconv.ParseFloat(row[6], 64)
+	ov.ROE, _ = strconv.ParseFloat(row[7], 64)
 	return ov, nil
 }
 

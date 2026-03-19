@@ -1,4 +1,4 @@
-package models
+package indicators
 
 // alignedReturns aligns two price series by date and returns paired daily returns.
 // Both slices must be chronological (oldest first).

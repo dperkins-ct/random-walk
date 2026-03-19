@@ -1,4 +1,4 @@
-package models
+package indicators
 
 // cheapThreshold: P/E below this is considered undervalued vs S&P 500 median (~25).
 const cheapThreshold = 18.0

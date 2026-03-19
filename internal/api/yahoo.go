@@ -10,7 +10,7 @@ import (
 	"strconv"
 	"time"
 
-	"github.com/dperkins-ct/random-walk/internal/models"
+	"github.com/dperkins-ct/random-walk/internal/indicators"
 )
 
 const yahooChartBase = "https://query1.finance.yahoo.com/v8/finance/chart/"
@@ -36,7 +36,7 @@ func NewYahooHandler() *YahooHandler {
 
 // FetchPrices retrieves up to maxHistoryYears of daily OHLCV + adjusted close
 // for ticker. The caller should use filterByPeriod to trim to the desired window.
-func (h *YahooHandler) FetchPrices(ticker string) ([]models.DailyPrice, error) {
+func (h *YahooHandler) FetchPrices(ticker string) ([]indicators.DailyPrice, error) {
 	now := time.Now()
 	start := now.AddDate(-maxHistoryYears, 0, 0)
 
@@ -78,7 +78,7 @@ func (h *YahooHandler) get(reqURL string) ([]byte, error) {
 
 // parseYahooChart deserialises the v8/finance/chart JSON response.
 // Null entries (market holidays, data gaps) are skipped automatically.
-func parseYahooChart(ticker string, body []byte) ([]models.DailyPrice, error) {
+func parseYahooChart(ticker string, body []byte) ([]indicators.DailyPrice, error) {
 	var raw struct {
 		Chart struct {
 			Result []struct {
@@ -125,12 +125,12 @@ func parseYahooChart(ticker string, body []byte) ([]models.DailyPrice, error) {
 		adjSlice = res.Indicators.AdjClose[0].AdjClose
 	}
 
-	prices := make([]models.DailyPrice, 0, len(res.Timestamp))
+	prices := make([]indicators.DailyPrice, 0, len(res.Timestamp))
 	for i, ts := range res.Timestamp {
 		if i >= len(q.Close) || q.Close[i] == nil {
 			continue
 		}
-		p := models.DailyPrice{
+		p := indicators.DailyPrice{
 			Date:  time.Unix(ts, 0).UTC().Format("2006-01-02"),
 			Close: *q.Close[i],
 		}
