@@ -4,7 +4,7 @@ import (
 	"fmt"
 	"strings"
 
-	"github.com/dperkins-ct/random-walk/internal/models"
+	"github.com/dperkins-ct/random-walk/internal/indicators"
 )
 
 const (
@@ -29,7 +29,7 @@ const lineWidth = 72
 func divider() string { return strings.Repeat("\u2500", lineWidth) }
 
 // Print renders a full ANSI-colored analysis report to stdout.
-func Print(result models.AnalysisResult) {
+func Print(result indicators.AnalysisResult) {
 	fmt.Println()
 	fmt.Println(bold(cyan(divider())))
 
@@ -139,6 +139,107 @@ func Print(result models.AnalysisResult) {
 
 	fmt.Println()
 
+	// --- Bollinger Bands --------------------------------------------------
+	fmt.Println(bold("  VOLATILITY & VOLUME"))
+	fmt.Println("  " + strings.Repeat("\u00b7", lineWidth-2))
+
+	bbRaw := fmt.Sprintf("%.2f / %.2f / %.2f", result.Bollinger.Lower, result.Bollinger.Middle, result.Bollinger.Upper)
+	var bbRef string
+	switch {
+	case result.BollingerSignal == indicators.SignalBuy:
+		bbRef = dim("price below lower band \u2192 oversold")
+	case result.BollingerSignal == indicators.SignalSell:
+		bbRef = dim("price above upper band \u2192 overbought")
+	default:
+		bbRef = dim(fmt.Sprintf("%%B=%.2f bw=%.4f", result.Bollinger.PctB, result.Bollinger.Bandwidth))
+	}
+	printRow("Bollinger (L/M/U)", colorSignal(result.BollingerSignal)(bbRaw), bbRaw, bbRef)
+
+	// OBV
+	obvRaw := fmt.Sprintf("%d", result.OBV.OBV)
+	if len(obvRaw) > 15 {
+		obvRaw = fmt.Sprintf("%.3eM", float64(result.OBV.OBV)/1e6)
+	}
+	var obvRef string
+	if result.OBV.Slope > 0 {
+		obvRef = dim(fmt.Sprintf("slope +%.0f/day \u2192 accumulation", result.OBV.Slope))
+	} else {
+		obvRef = dim(fmt.Sprintf("slope %.0f/day \u2192 distribution", result.OBV.Slope))
+	}
+	printRow("OBV (20d slope)", colorSignal(result.OBVSignal)(obvRaw), obvRaw, obvRef)
+
+	fmt.Println()
+
+	// --- Market Context ---------------------------------------------------
+	fmt.Println(bold("  MARKET CONTEXT"))
+	fmt.Println("  " + strings.Repeat("\u00b7", lineWidth-2))
+
+	rsRaw := fmt.Sprintf("%.3f", result.RS.VsSPY)
+	var rsRef string
+	switch result.RSSignal {
+	case indicators.SignalBuy:
+		rsRef = dim(fmt.Sprintf("> 1.10 \u2192 outperforming SPY by +%.1f%%", (result.RS.VsSPY-1)*100))
+	case indicators.SignalSell:
+		rsRef = dim(fmt.Sprintf("< 0.90 \u2192 underperforming SPY by %.1f%%", (1-result.RS.VsSPY)*100))
+	default:
+		rsRef = dim("within \u00b110%% of SPY return")
+	}
+	printRow("Rel Strength vs SPY", colorSignal(result.RSSignal)(rsRaw), rsRaw, rsRef)
+
+	if result.RS.VsSector != 0 {
+		rsSecRaw := fmt.Sprintf("%.3f", result.RS.VsSector)
+		var rsSecRef string
+		if result.RS.VsSector > 1 {
+			rsSecRef = dim(fmt.Sprintf("outperforming sector ETF by +%.1f%%", (result.RS.VsSector-1)*100))
+		} else {
+			rsSecRef = dim(fmt.Sprintf("underperforming sector ETF by %.1f%%", (1-result.RS.VsSector)*100))
+		}
+		printRow("Rel Strength vs Sector", yellow(rsSecRaw), rsSecRaw, rsSecRef)
+	}
+
+	fmt.Println()
+
+	// --- Risk ---------------------------------------------------------------
+	fmt.Println(bold("  RISK"))
+	fmt.Println("  " + strings.Repeat("\u00b7", lineWidth-2))
+
+	ddRaw := fmt.Sprintf("%.2f%%", result.Drawdown.MaxDrawdown*100)
+	ddRef := dim(fmt.Sprintf("Calmar %.2f | > 40%% severe", result.Drawdown.Calmar))
+	printRow("Max Drawdown", colorSignal(result.DrawdownSignal)(ddRaw), ddRaw, ddRef)
+
+	varRaw := fmt.Sprintf("%.2f%%", result.VaR.VaR95*100)
+	varRef := dim(fmt.Sprintf("CVaR %.2f%% | < -3%% high tail risk", result.VaR.CVaR*100))
+	printRow("VaR 95% (daily)", colorSignal(result.VaRSignal)(varRaw), varRaw, varRef)
+
+	fmt.Println()
+
+	// --- Fundamentals (only when data is available) -----------------------
+	if result.Fundamentals.PEGRatio > 0 || result.Fundamentals.PriceToBook > 0 {
+		fmt.Println(bold("  FUNDAMENTALS"))
+		fmt.Println("  " + strings.Repeat("\u00b7", lineWidth-2))
+
+		pegRaw := "N/A"
+		if result.Fundamentals.PEGRatio > 0 {
+			pegRaw = fmt.Sprintf("%.2f", result.Fundamentals.PEGRatio)
+		}
+		pegRef := dim("< 1 undervalued | 1-2 fair | > 2 stretched")
+		printRow("PEG Ratio", colorPEG(result.Fundamentals.PEGRatio), pegRaw, pegRef)
+
+		pbRaw := "N/A"
+		if result.Fundamentals.PriceToBook > 0 {
+			pbRaw = fmt.Sprintf("%.2f", result.Fundamentals.PriceToBook)
+		}
+		pbRef := dim("< 1 below book | 1-4 normal | > 4 premium")
+		printRow("Price-to-Book (P/B)", colorPB(result.Fundamentals.PriceToBook), pbRaw, pbRef)
+
+		if result.Fundamentals.ROE != 0 {
+			roeRaw := fmt.Sprintf("%.1f%%", result.Fundamentals.ROE*100)
+			printRow("Return on Equity", yellow(roeRaw), roeRaw, dim("profitability of shareholder equity"))
+		}
+
+		fmt.Println()
+	}
+
 	// --- Signals ----------------------------------------------------------
 	fmt.Println(bold("  SIGNALS"))
 	printSig("Sharpe:", signalStr(result.SharpeSignal))
@@ -147,7 +248,18 @@ func Print(result models.AnalysisResult) {
 	printSig("Moving Averages:", signalStr(result.MASignalVal))
 	printSig("RSI (14):", signalStr(result.RSISignal))
 	printSig("P/E Valuation:", signalStr(result.PESignalVal))
-	fmt.Printf("  %-28s %d / %d\n", "Composite Score:", result.CompositeScore, result.MaxScore)
+	printSig("Bollinger Bands:", signalStr(result.BollingerSignal))
+	printSig("On-Balance Volume:", signalStr(result.OBVSignal))
+	printSig("Relative Strength:", signalStr(result.RSSignal))
+	printSig("Max Drawdown:", signalStr(result.DrawdownSignal))
+	printSig("Value at Risk:", signalStr(result.VaRSignal))
+	if result.Fundamentals.PEGRatio > 0 || result.Fundamentals.PriceToBook > 0 {
+		printSig("Fundamentals (PEG/D/E):", signalStr(result.FundamentalsSignal))
+	}
+
+	fmt.Printf("  %-28s %.1f  %s\n",
+		"Composite Score:", result.CompositeScore,
+		dim(fmt.Sprintf("(range \u2212%.1f to +%.1f | BUY \u2265 6.0 | SELL \u2264 \u22126.0)", result.MaxScore, result.MaxScore)))
 	fmt.Println()
 
 	// --- Recommendation ---------------------------------------------------
@@ -261,11 +373,11 @@ func colorAlpha(v float64) string {
 	}
 }
 
-func colorMAFn(trend models.MASignal) func(string) string {
+func colorMAFn(trend indicators.MASignal) func(string) string {
 	switch trend {
-	case models.Bullish:
+	case indicators.Bullish:
 		return green
-	case models.Bearish:
+	case indicators.Bearish:
 		return red
 	default:
 		return yellow
@@ -299,24 +411,66 @@ func colorPE(v float64) string {
 	}
 }
 
-func signalStr(s models.ModelSignal) string {
+func signalStr(s indicators.ModelSignal) string {
 	switch s {
-	case models.SignalBuy:
+	case indicators.SignalBuy:
 		return green("BUY  (+1)")
-	case models.SignalSell:
+	case indicators.SignalSell:
 		return red("SELL (-1)")
 	default:
 		return yellow("HOLD ( 0)")
 	}
 }
 
-func recColorFn(r models.Recommendation) func(string) string {
+func recColorFn(r indicators.Recommendation) func(string) string {
 	switch r {
-	case models.Buy:
+	case indicators.Buy:
 		return green
-	case models.Sell:
+	case indicators.Sell:
 		return red
 	default:
 		return yellow
+	}
+}
+
+// colorSignal returns a coloring function based on a ModelSignal.
+func colorSignal(s indicators.ModelSignal) func(string) string {
+	switch s {
+	case indicators.SignalBuy:
+		return green
+	case indicators.SignalSell:
+		return red
+	default:
+		return yellow
+	}
+}
+
+func colorPEG(v float64) string {
+	if v <= 0 {
+		return yellow("N/A")
+	}
+	s := fmt.Sprintf("%.2f", v)
+	switch {
+	case v < 1.0:
+		return green(s)
+	case v <= 2.0:
+		return yellow(s)
+	default:
+		return red(s)
+	}
+}
+
+func colorPB(v float64) string {
+	if v <= 0 {
+		return yellow("N/A")
+	}
+	s := fmt.Sprintf("%.2f", v)
+	switch {
+	case v < 1.0:
+		return green(s)
+	case v <= 4.0:
+		return yellow(s)
+	default:
+		return red(s)
 	}
 }

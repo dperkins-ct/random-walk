@@ -1,4 +1,4 @@
-package models
+package indicators
 
 // RSI computes the 14-period Relative Strength Index using Wilder's smoothing.
 //

@@ -11,7 +11,7 @@ import (
 	"github.com/dperkins-ct/random-walk/internal/analysis"
 	"github.com/dperkins-ct/random-walk/internal/api"
 	"github.com/dperkins-ct/random-walk/internal/cache"
-	"github.com/dperkins-ct/random-walk/internal/models"
+	"github.com/dperkins-ct/random-walk/internal/indicators"
 	"github.com/dperkins-ct/random-walk/internal/output"
 )
 
@@ -72,7 +72,7 @@ func run(args []string) error {
 	}
 
 	// Overview: one Alpha Vantage call, cached for the day.
-	var overview models.Overview
+	var overview indicators.Overview
 	if avKey != "" {
 		overview, err = fetchAVOverview(api.NewHandler(avKey), ticker)
 		if err != nil {
@@ -84,7 +84,17 @@ func run(args []string) error {
 				"      Add ALPHAVANTAGE_API_KEY=<key> to .env for full analysis.\n")
 	}
 
-	result, err := analysisHandler.Analyze(ticker, stockPrices, spyPrices, overview, *period)
+	// Sector ETF prices: fetch once, cached like any other price series.
+	// If the sector is unknown or the fetch fails we pass nil and the handler skips it.
+	var sectorPrices []indicators.DailyPrice
+	if etf, ok := indicators.SectorETF(overview.Sector); ok {
+		sectorPrices, err = fetchPrices(yh, etf)
+		if err != nil {
+			fmt.Fprintf(os.Stderr, "warning: sector ETF (%s) unavailable: %v\n", etf, err)
+		}
+	}
+
+	result, err := analysisHandler.Analyze(ticker, stockPrices, spyPrices, sectorPrices, overview, *period)
 	if err != nil {
 		return fmt.Errorf("analysis: %w", err)
 	}
@@ -96,7 +106,7 @@ func run(args []string) error {
 // fetchPrices returns up to 5 years of prices from the local CSV cache if it is
 // still fresh (written today), otherwise fetches from Yahoo Finance and
 // refreshes the cache.
-func fetchPrices(h *api.YahooHandler, ticker string) ([]models.DailyPrice, error) {
+func fetchPrices(h *api.YahooHandler, ticker string) ([]indicators.DailyPrice, error) {
 	cachePath, err := cache.PricesCachePath(ticker)
 	if err == nil && cache.IsFresh(cachePath) {
 		if prices, err := cache.ReadPrices(ticker); err == nil && len(prices) > 300 {
@@ -115,7 +125,7 @@ func fetchPrices(h *api.YahooHandler, ticker string) ([]models.DailyPrice, error
 
 // fetchAVOverview returns the overview from cache if fresh, otherwise calls
 // the Alpha Vantage OVERVIEW endpoint (free tier, 1 call/day per ticker).
-func fetchAVOverview(h *api.Handler, ticker string) (models.Overview, error) {
+func fetchAVOverview(h *api.Handler, ticker string) (indicators.Overview, error) {
 	cachePath, err := cache.OverviewCachePath(ticker)
 	if err == nil && cache.IsFresh(cachePath) {
 		if ov, err := cache.ReadOverview(ticker); err == nil {
@@ -124,7 +134,7 @@ func fetchAVOverview(h *api.Handler, ticker string) (models.Overview, error) {
 	}
 	ov, err := h.FetchOverview(ticker)
 	if err != nil {
-		return models.Overview{}, err
+		return indicators.Overview{}, err
 	}
 	_ = cache.WriteOverview(ticker, ov)
 	return ov, nil

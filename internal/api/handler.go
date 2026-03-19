@@ -9,7 +9,7 @@ import (
 	"strconv"
 	"time"
 
-	"github.com/dperkins-ct/random-walk/internal/models"
+	"github.com/dperkins-ct/random-walk/internal/indicators"
 )
 
 const baseURL = "https://www.alphavantage.co/query"
@@ -32,7 +32,7 @@ func NewHandler(apiKey string) *Handler {
 // endpoint. The free tier does not provide an adjusted close, so Close is used
 // for both Close and AdjClose in all downstream calculations.
 // outputSize must be "compact" (last 100 days) or "full" (20+ years).
-func (h *Handler) FetchPrices(ticker, outputSize string) ([]models.DailyPrice, error) {
+func (h *Handler) FetchPrices(ticker, outputSize string) ([]indicators.DailyPrice, error) {
 	url := fmt.Sprintf(
 		"%s?function=TIME_SERIES_DAILY&symbol=%s&outputsize=%s&apikey=%s",
 		baseURL, ticker, outputSize, h.apiKey,
@@ -73,9 +73,9 @@ func (h *Handler) FetchPrices(ticker, outputSize string) ([]models.DailyPrice, e
 		return nil, fmt.Errorf("no price data returned for %s", ticker)
 	}
 
-	prices := make([]models.DailyPrice, 0, len(raw.TimeSeriesDaily))
+	prices := make([]indicators.DailyPrice, 0, len(raw.TimeSeriesDaily))
 	for date, vals := range raw.TimeSeriesDaily {
-		p := models.DailyPrice{Date: date}
+		p := indicators.DailyPrice{Date: date}
 		p.Open, _ = strconv.ParseFloat(vals.Open, 64)
 		p.High, _ = strconv.ParseFloat(vals.High, 64)
 		p.Low, _ = strconv.ParseFloat(vals.Low, 64)
@@ -93,40 +93,46 @@ func (h *Handler) FetchPrices(ticker, outputSize string) ([]models.DailyPrice, e
 }
 
 // FetchOverview fetches fundamental data for ticker via the OVERVIEW endpoint.
-func (h *Handler) FetchOverview(ticker string) (models.Overview, error) {
+func (h *Handler) FetchOverview(ticker string) (indicators.Overview, error) {
 	url := fmt.Sprintf("%s?function=OVERVIEW&symbol=%s&apikey=%s",
 		baseURL, ticker, h.apiKey)
 	resp, err := h.httpClient.Get(url)
 	if err != nil {
-		return models.Overview{}, fmt.Errorf("fetch overview for %s: %w", ticker, err)
+		return indicators.Overview{}, fmt.Errorf("fetch overview for %s: %w", ticker, err)
 	}
 	defer resp.Body.Close()
 
 	body, err := io.ReadAll(resp.Body)
 	if err != nil {
-		return models.Overview{}, fmt.Errorf("read overview response: %w", err)
+		return indicators.Overview{}, fmt.Errorf("read overview response: %w", err)
 	}
 
 	var raw struct {
-		Symbol    string `json:"Symbol"`
-		Name      string `json:"Name"`
-		Sector    string `json:"Sector"`
-		PERatio   string `json:"PERatio"`
-		ForwardPE string `json:"ForwardPE"`
-		Note      string `json:"Note"`
+		Symbol      string `json:"Symbol"`
+		Name        string `json:"Name"`
+		Sector      string `json:"Sector"`
+		PERatio     string `json:"PERatio"`
+		ForwardPE   string `json:"ForwardPE"`
+		PEGRatio    string `json:"PEGRatio"`
+		PriceToBook string `json:"PriceToBookRatio"`
+		ROE         string `json:"ReturnOnEquityTTM"`
+		Note        string `json:"Note"`
 	}
 	if err := json.Unmarshal(body, &raw); err != nil {
-		return models.Overview{}, fmt.Errorf("parse overview for %s: %w", ticker, err)
+		return indicators.Overview{}, fmt.Errorf("parse overview for %s: %w", ticker, err)
 	}
 	if raw.Note != "" {
-		return models.Overview{}, fmt.Errorf("alpha vantage rate limit: %s", raw.Note)
+		return indicators.Overview{}, fmt.Errorf("alpha vantage rate limit: %s", raw.Note)
 	}
-	ov := models.Overview{
+	ov := indicators.Overview{
 		Symbol: raw.Symbol,
 		Name:   raw.Name,
 		Sector: raw.Sector,
 	}
 	ov.PERatio, _ = strconv.ParseFloat(raw.PERatio, 64)
 	ov.ForwardPE, _ = strconv.ParseFloat(raw.ForwardPE, 64)
+	ov.PEGRatio, _ = strconv.ParseFloat(raw.PEGRatio, 64)
+	ov.PriceToBook, _ = strconv.ParseFloat(raw.PriceToBook, 64)
+	ov.ROE, _ = strconv.ParseFloat(raw.ROE, 64)
 	return ov, nil
 }

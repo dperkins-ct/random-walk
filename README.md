@@ -139,6 +139,140 @@ Subsequent runs on the same calendar day use **0 requests** (served from CSV cac
 go test ./...
 ```
 
+## Future Enhancements
+                                                                                                                        
+  🚀 Multi-Stock Comparison Feature                                                                                           
+                                                                                                                              
+  For your S&P 500 screening request, here's the architecture I recommend:                                                    
+                  
+  1. New CLI Interface                                                                                                        
+                  
+  # Screen entire S&P 500                                                                                                     
+  random-walk --screen sp500 --top 10 --min-score 3                                                                           
+                                                                                                                              
+  # Screen specific sectors                                                                                                   
+  random-walk --screen technology --exclude AAPL,MSFT                                                                         
+                                                                                                                              
+  # Custom ticker list                                                                                                        
+  random-walk --screen AAPL,MSFT,GOOGL,AMZN --sort-by sharpe                                                                  
+                                                                                                                              
+  # Filter by criteria                                                                                                        
+  random-walk --screen sp500 --pe-max 25 --beta-max 1.5 --min-volume 1000000                                                  
+                                                                                                                              
+  2. Data Structure Changes                                                                                                   
+                                                                                                                              
+  New Types Needed:                                                                                                           
+  // ScreeningResult holds results for multiple stocks
+  type ScreeningResult struct {                                                                                               
+      Results []AnalysisResult                                                                                                
+      Metadata ScreeningMetadata                                                                                              
+  }                                                                                                                           
+                                                                                                                              
+  type ScreeningMetadata struct {
+      TotalAnalyzed int                                                                                                       
+      TopBuys []AnalysisResult  // Best buy candidates
+      TopSells []AnalysisResult // Avoid these                                                                                
+      SectorBreakdown map[string]int                                                                                          
+      RiskProfile string // Conservative/Moderate/Aggressive                                                                  
+  }                                                                                                                           
+                                                                                                                              
+  3. Implementation Strategy                                                                                                  
+                                                                                                                              
+  Phase 1: Basic Screening                                                                                                    
+  // New screening handler                                                                                                    
+  type ScreeningHandler struct {                                                                                              
+      analysisHandler *analysis.Handler                                                                                       
+      apiHandler *api.Handler                                                                                                 
+      concurrency int // Parallel API calls                                                                                   
+      filters ScreeningFilters                                                                                                
+  }                                                                                                                           
+                                                                                                                              
+  type ScreeningFilters struct {                                                                                              
+      MinMarketCap float64                                                                                                    
+      MaxPE float64       
+      MaxBeta float64                                                                                                         
+      MinVolume int64                                                                                                         
+      Sectors []string                                                                                                        
+      ExcludeTickers []string                                                                                                 
+  }                                                                                                                           
+                                                                                                                              
+  Phase 2: Advanced Features                                                                                                  
+  - Sector rotation analysis - Which sectors are strongest                                                                    
+  - Risk-adjusted portfolio suggestions - Optimal allocation                                                                  
+  - Correlation matrix - Diversification analysis                                                                             
+  - Factor analysis - Value/Growth/Momentum tilts                                                                             
+                                                                                                                              
+  4. Data Sources & Efficiency                                                                                                
+                                                                                                                              
+  S&P 500 Ticker Lists:                                                                                                       
+  - Maintain static list in internal/data/sp500.json                                                                          
+  - Periodic updates via API or manual refresh                                                                                
+  - Support other indices (Russell 2000, NASDAQ 100)
+                                                                                                                              
+  API Rate Limiting:                                                                                                          
+  - Batch processing with configurable delays                                                                                 
+  - Intelligent caching - refresh only stale data                                                                             
+  - Parallel processing - Yahoo Finance allows more requests                                                                  
+  - Fallback sources - Multiple data providers                                                                                
+                                                                                                                              
+  5. Enhanced Output Formats                                                                                                  
+                                                                                                                              
+  Terminal Dashboard:                                                                                                         
+  TOP 10 BUY CANDIDATES (Score ≥ 4/6)                                                                                         
+                                                   
+                                                                                                                              
+  SECTOR ANALYSIS                                                                                                             
+  Technology: 45% SELL signals - Avoid sector                                                                                 
+  Healthcare: 60% BUY signals - Strong sector                                                                                 
+  Financials: Mixed signals - Selective picks                                                                                 
+                                                                                                                              
+  Export Options:                                                                                                             
+  - JSON output for programmatic use                                                                                          
+  - CSV export for spreadsheet analysis                                                                                       
+  - PDF report for presentations                                                                                              
+                                                                                                                              
+  📊 Enhanced Analysis Models                                                                                                 
+                                                                                                                              
+  1. Composite Scoring Improvements                                                                                           
+                                                                                                                              
+  Weighted Scoring:                                                                                                           
+  type ModelWeights struct {
+      Technical   float64 // 0.4 - Moving averages, RSI, etc.                                                                 
+      Fundamental float64 // 0.3 - PE, growth, financial health                                                               
+      Risk        float64 // 0.2 - Sharpe, volatility, drawdown                                                               
+      Momentum    float64 // 0.1 - Recent price action                                                                        
+  }                                                                                                                           
+                                                                                                                              
+  Dynamic Thresholds:                                                                                                         
+  - Market regime awareness - Bull/bear market adjustments                                                                    
+  - Sector-specific benchmarks - Tech vs Utilities different standards                                                        
+  - Market cap adjustments - Small cap vs large cap criteria                                                                  
+                                                                                                                              
+  2. Time Series Analysis                                                                                                     
+                                                                                                                              
+  - Seasonal patterns - Identify recurring trends                                                                             
+  - Earnings cycle analysis - Pre/post earnings behavior                                                                      
+  - Ex-dividend date impact - Dividend capture strategies                                                                     
+                                                                                                                              
+  🛠 Implementation Priority                                                                                                   
+                                                                                                                              
+  High Priority (Immediate Impact):                                                                                           
+  1. Multi-stock screening CLI - Your main request
+  4. Sector comparison - Relative performance                                                                                 
+                                                                                                                              
+                                                                                                                        
+  💡 Specific Code Additions                                                                                                  
+                                                                                                                              
+  New Packages to Add:                                                                                                        
+  - internal/screening/ - Multi-stock analysis                                                                                
+  - internal/indices/ - S&P 500, sector lists                                                                                 
+  - internal/indicators/ - Additional technical indicators
+  - internal/fundamental/ - Enhanced fundamental analysis                                                                     
+  - internal/export/ - Output format handlers                                                                                 
+                                                                                                                              
+  This approach would transform your tool from a single-stock analyzer into a comprehensive market screening and analysis     
+  platform while maintaining the excellent foundation you've built!  
+
 ## License
 
 See [LICENSE](LICENSE).

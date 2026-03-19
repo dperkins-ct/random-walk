@@ -1,4 +1,4 @@
-package models
+package indicators
 
 // ema computes the Exponential Moving Average series for a given period.
 // prices must be chronological (oldest first).
